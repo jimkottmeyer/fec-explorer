@@ -724,7 +724,7 @@
       }
 
 
-      // Stage 2 — Claude Sonnet + web search
+      // Stage 2 — Claude Sonnet + web search (multi-turn)
       setStatus('Searching with Claude…');
       startIndeterminate();
       debugLog('Stage 2: calling Claude Sonnet with web search');
@@ -734,33 +734,76 @@ IMPORTANT: Return ONLY a raw JSON object. No markdown, no backticks, no preamble
 Format: {"summary":"2-3 sentences with dollar figures","table":{"headers":["Col1",...],"rows":[["val",...],...]},"source_url":"https://www.fec.gov/..."}
 Max 10 rows, 5 columns. Money as "$12.3M". Set table to null if not useful.`;
 
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const claudeHeaders = {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+
+      // Turn 1 — may return tool_use blocks instead of final text
+      const resp1 = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
+        headers: claudeHeaders,
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          max_tokens: 2000,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],
           system,
           messages: [{ role: 'user', content: q }]
         })
       });
 
-      debugLog('HTTP ' + resp.status);
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
+      debugLog('Turn 1 HTTP ' + resp1.status);
+      if (!resp1.ok) {
+        const errBody = await resp1.json().catch(() => ({}));
         debugLog('Error: ' + JSON.stringify(errBody));
-        throw new Error(errBody?.error?.message || 'API error ' + resp.status);
+        throw new Error(errBody?.error?.message || 'API error ' + resp1.status);
       }
 
-      const data = await resp.json();
-      debugLog('stop_reason=' + data.stop_reason + ' blocks=' + data.content?.length);
-      const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+      const data1 = await resp1.json();
+      debugLog('Turn 1: stop_reason=' + data1.stop_reason + ' blocks=' + data1.content?.length);
+
+      let finalContent;
+
+      if (data1.stop_reason === 'tool_use') {
+        // Turn 2 — submit tool results so Claude can return the final answer
+        debugLog('Tool use detected, making Turn 2…');
+        const toolResults = (data1.content || [])
+          .filter(b => b.type === 'tool_use')
+          .map(b => ({ type: 'tool_result', tool_use_id: b.id, content: '' }));
+
+        const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: claudeHeaders,
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2000,
+            tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+            system,
+            messages: [
+              { role: 'user', content: q },
+              { role: 'assistant', content: data1.content },
+              { role: 'user', content: toolResults }
+            ]
+          })
+        });
+
+        debugLog('Turn 2 HTTP ' + resp2.status);
+        if (!resp2.ok) {
+          const errBody = await resp2.json().catch(() => ({}));
+          debugLog('Turn 2 error: ' + JSON.stringify(errBody));
+          throw new Error(errBody?.error?.message || 'API error ' + resp2.status);
+        }
+
+        const data2 = await resp2.json();
+        debugLog('Turn 2: stop_reason=' + data2.stop_reason + ' blocks=' + data2.content?.length);
+        finalContent = data2.content;
+      } else {
+        finalContent = data1.content;
+      }
+
+      const raw = (finalContent || []).filter(b => b.type === 'text').map(b => b.text).join('');
       debugLog('raw text: ' + raw.slice(0, 200));
 
       let parsed;
