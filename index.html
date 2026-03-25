@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FEC Campaign Finance Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #eeecea;
+    --border: rgba(0,0,0,0.1);
+    --border-hover: rgba(0,0,0,0.2);
+    --accent: #1a4ed8;
+    --accent-dim: rgba(26,78,216,0.1);
+    --accent-dim2: rgba(26,78,216,0.05);
+    --text: #111318;
+    --text-muted: #555b6b;
+    --text-faint: #9ba3b4;
+    --red: #c0392b;
+    --red-dim: rgba(192,57,43,0.08);
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  .page { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* header */
+  header {
+    padding: 52px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  h1 span { color: var(--accent); }
+  .header-desc {
+    font-size: 15px;
+    color: var(--text-muted);
+    max-width: 520px;
+  }
+
+  /* api key section */
+  .key-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .key-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .key-input-wrap { flex: 1; min-width: 220px; position: relative; }
+  #api-key {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 40px 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #api-key:focus { border-color: var(--accent); }
+  #api-key::placeholder { color: var(--text-faint); }
+  .toggle-key {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 4px;
+  }
+  .toggle-key:hover { color: var(--text); }
+  .key-hint {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .key-hint a { color: var(--accent); text-decoration: none; }
+  .key-hint a:hover { text-decoration: underline; }
+
+  /* search */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  #query {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 130px 16px 20px;
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  #query:focus { border-color: var(--accent); background: var(--surface2); }
+  #query::placeholder { color: var(--text-faint); }
+  #ask-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  #ask-btn:hover { opacity: 0.88; }
+  #ask-btn:active { transform: translateY(-50%) scale(0.97); }
+  #ask-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* chips */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 36px;
+  }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    background: transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim2);
+  }
+
+  /* status */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 24px;
+    margin-bottom: 24px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .dot-spinner {
+    display: none;
+    gap: 4px;
+    align-items: center;
+  }
+  .dot-spinner span {
+    width: 5px; height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .dot-spinner span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-spinner span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  /* error */
+  #error-box {
+    display: none;
+    background: var(--red-dim);
+    border: 1px solid rgba(255,107,107,0.2);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--red);
+    margin-bottom: 24px;
+    font-family: var(--font-mono);
+  }
+
+  /* answer */
+  #answer-box { display: none; }
+
+  .answer-summary {
+    font-size: 16px;
+    color: var(--text);
+    line-height: 1.75;
+    margin-bottom: 28px;
+    padding: 20px 24px;
+    background: var(--accent-dim2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+  }
+
+  /* table */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .table-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+  .table-scroll { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    padding: 10px 20px;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 11px 20px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(255,255,255,0.02); }
+  .money { font-family: var(--font-mono); color: #1a6e2e; font-size: 12px; }
+  .party-r { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #fde8e8; color: #9b1c1c; font-family: var(--font-mono); letter-spacing: 0.05em; }
+  .party-d { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; font-family: var(--font-mono); letter-spacing: 0.05em; }
+  .party-o { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #f0f0ee; color: var(--text-muted); font-family: var(--font-mono); letter-spacing: 0.05em; }
+  td.dim { color: var(--text-faint); font-family: var(--font-mono); font-size: 12px; }
+
+  /* source */
+  .source-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .source-link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    transition: color 0.15s;
+  }
+  .source-link:hover { color: var(--accent); }
+
+  /* footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  footer a { color: var(--text-faint); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  /* two-column bottom panels */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 48px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .panel-action {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .panel-action:hover { background: var(--accent-dim2); }
+  .panel-body { padding: 12px 16px; max-height: 280px; overflow-y: auto; }
+  .panel-empty {
+    font-size: 13px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    text-align: center;
+    padding: 24px 0;
+  }
+
+  /* log entries */
+  .log-entry {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    padding-top: 2px;
+    min-width: 72px;
+  }
+  .log-q {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  /* suggestion entries */
+  .suggestion-entry {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .suggestion-entry:last-child { border-bottom: none; }
+  .suggestion-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    min-width: 20px;
+    padding-top: 2px;
+  }
+  .suggestion-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+    flex: 1;
+  }
+  .suggestion-date {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    padding-top: 2px;
+  }
+
+  /* suggestion input row */
+  .suggestion-input-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  #suggestion-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: var(--font-display);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #suggestion-input:focus { border-color: var(--accent); }
+  #suggestion-input::placeholder { color: var(--text-faint); }
+  #suggestion-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+  }
+  #suggestion-btn:hover { opacity: 0.85; }
+
+  @media (max-width: 700px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    header { padding: 32px 0 28px; }
+    .key-section { flex-direction: column; align-items: stretch; }
+    #query { padding-right: 100px; font-size: 15px; }
+  }
+
+  #progress-bar-wrap{height:3px;background:var(--border);border-radius:2px;margin-bottom:20px;overflow:hidden;display:none}
+  #progress-bar{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width 0.45s ease;position:relative}
+  @keyframes indet{0%{left:-60%;width:60%}100%{left:110%;width:60%}}
+  #progress-bar.indet{animation:indet 1.3s ease-in-out infinite;width:60%!important}
+
+  /* debug panel */
+  #debug-panel { margin-top: 24px; display: none; }
+  #debug-toggle { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); background: none; border: none; cursor: pointer; padding: 0; letter-spacing: 0.04em; }
+  #debug-toggle:hover { color: var(--text-muted); }
+  #debug-log { margin-top: 8px; background: #1a1a1a; color: #b0ffb0; font-family: var(--font-mono); font-size: 11px; padding: 12px 14px; border-radius: 8px; max-height: 180px; overflow-y: auto; line-height: 1.8; display: none; }
+  #debug-log div::before { content: '> '; opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">FEC.gov · Campaign Finance</div>
+    <h1>Follow the <span>money.</span></h1>
+    <p class="header-desc">Ask plain-English questions about U.S. campaign finance disclosures. Powered by Claude + FEC data.</p>
+  </header>
+
+  <div class="key-section">
+    <span class="key-label">Anthropic API Key</span>
+    <div class="key-input-wrap">
+      <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off" />
+      <button class="toggle-key" onclick="toggleKey()" title="Show/hide key">👁</button>
+    </div>
+    <span class="key-hint">Need a key? <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></span>
+  </div>
+
+  <div class="search-wrap">
+    <input id="query" type="text" placeholder="e.g. How much did John Fetterman raise in 2022?" />
+    <button id="ask-btn" onclick="askQuestion()">Ask →</button>
+  </div>
+
+  <div class="chips">
+    <button class="chip" onclick="setQ('Top presidential candidates by fundraising in 2024')">2024 presidential fundraisers</button>
+    <button class="chip" onclick="setQ('How much did Kamala Harris raise in 2024?')">Kamala Harris 2024</button>
+    <button class="chip" onclick="setQ('Which Super PACs spent the most in 2024?')">Top Super PACs</button>
+    <button class="chip" onclick="setQ('Top Senate candidates by fundraising in 2024')">Senate fundraisers</button>
+    <button class="chip" onclick="setQ('Biggest donors to presidential campaigns in 2024')">Biggest donors</button>
+    <button class="chip" onclick="setQ('How much did the Republican and Democratic parties raise in 2024?')">Party totals</button>
+    <button class="chip" onclick="setQ('Largest independent expenditures in 2024')">Independent expenditures</button>
+    <button class="chip" onclick="setQ('Top House candidates by fundraising in 2024')">House fundraisers</button>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div id="status-bar">
+    <div class="dot-spinner" id="spinner">
+      <span></span><span></span><span></span>
+    </div>
+    <span id="status-text"></span>
+  </div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+
+  <div id="answer-box">
+    <div class="answer-summary" id="answer-text"></div>
+    <div id="table-container"></div>
+    <div class="source-row">
+      <a class="source-link" id="fec-link" href="https://www.fec.gov/data/" target="_blank">↗ fec.gov/data</a>
+      <a class="source-link" href="https://www.opensecrets.org/" target="_blank">↗ opensecrets.org</a>
+    </div>
+  </div>
+
+  <!-- Query log + Suggestion box -->
+  <div class="panels">
+
+    <!-- Query Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Query log</span>
+        <button class="panel-action" onclick="exportLog()">Export CSV</button>
+      </div>
+      <div class="panel-body" id="log-body">
+        <div class="panel-empty" id="log-empty">No queries yet</div>
+      </div>
+    </div>
+
+    <!-- Suggestion Box -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Suggest a feature</span>
+        <button class="panel-action" onclick="clearSuggestions()">Clear all</button>
+      </div>
+      <div class="panel-body" id="suggestion-body">
+        <div class="panel-empty" id="suggestion-empty">No suggestions yet</div>
+      </div>
+      <div class="suggestion-input-row">
+        <input id="suggestion-input" type="text" placeholder="What would you like to see added?" maxlength="200" />
+        <button id="suggestion-btn" onclick="submitSuggestion()">Submit</button>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- Debug panel -->
+  <div id="debug-panel">
+    <button id="debug-toggle" onclick="toggleDebug()">Show debug log</button>
+    <div id="debug-log"></div>
+  </div>
+
+  <footer>
+    <span>Data sourced from FEC.gov via Claude web search</span>
+    <span><a href="https://www.fec.gov/data/" target="_blank">FEC Open Data</a> · <a href="https://docs.anthropic.com/" target="_blank">Anthropic API</a></span>
+  </footer>
+
+</div>
+
+<script>
+  function setQ(t) { document.getElementById('query').value = t; }
+
+  function toggleKey() {
+    const inp = document.getElementById('api-key');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status-text').textContent = msg;
+    document.getElementById('spinner').style.display = msg ? 'flex' : 'none';
+  }
+
+  function partyBadge(p) {
+    if (!p) return '<span style="color:var(--text-faint)">—</span>';
+    const u = (p + '').toUpperCase();
+    if (u === 'REP' || u === 'R') return '<span class="party-r">R</span>';
+    if (u === 'DEM' || u === 'D') return '<span class="party-d">D</span>';
+    return '<span class="party-o">' + p + '</span>';
+  }
+
+  function isMoney(h) {
+    return /raised|spent|amount|receipt|disburs|cash|total|fund/i.test(h);
+  }
+
+  function trunc(s, n) {
+    s = String(s ?? '—');
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
+  // ── FEC direct API helper ─────────────────────────────────
+  function fmtM(n) {
+    if (n == null) return '—';
+    const x = parseFloat(n); if (isNaN(x)) return '—';
+    if (Math.abs(x) >= 1e9) return '$' + (x/1e9).toFixed(1) + 'B';
+    if (Math.abs(x) >= 1e6) return '$' + (x/1e6).toFixed(1) + 'M';
+    if (Math.abs(x) >= 1e3) return '$' + Math.round(x/1e3) + 'K';
+    return '$' + Math.round(x).toLocaleString();
+  }
+
+  async function tryFecDirect(q, year) {
+    const KEY = 'DEMO_KEY';
+    const isSenate = /\bsenate\b/i.test(q);
+    const isHouse = /\bhouse\b/i.test(q);
+    const isPresidential = /president/i.test(q);
+    const isRanking = /top|list|rank|fundrais|most/i.test(q);
+    try {
+      if (isPresidential && isRanking) {
+        const r = await fetch('https://api.open.fec.gov/v1/totals/presidential/?election_year=' + year + '&sort=-receipts&per_page=10&api_key=' + KEY);
+        if (!r.ok) return null;
+        const d = await r.json();
+        if (!d.results?.length) return null;
+        return {
+          summary: 'Top presidential candidates by total receipts in the ' + year + ' election cycle, per FEC filings.',
+          table: { headers: ['Candidate','Party','Total Raised','Total Spent','Cash on Hand'],
+            rows: d.results.slice(0,10).map(c => [c.candidate_name||'—', c.party||'—', fmtM(c.receipts), fmtM(c.disbursements), fmtM(c.last_cash_on_hand_end_period)]) },
+          source_url: 'https://www.fec.gov/data/elections/president/' + year + '/'
+        };
+      }
+      if (isSenate && isRanking) {
+        const r = await fetch('https://api.open.fec.gov/v1/candidates/totals/?office=S&election_year=' + year + '&sort=-receipts&per_page=10&api_key=' + KEY);
+        if (!r.ok) return null;
+        const d = await r.json();
+        if (!d.results?.length) return null;
+        return {
+          summary: 'Top Senate candidates by total receipts in the ' + year + ' election cycle, per FEC filings.',
+          table: { headers: ['Candidate','Party','State','Total Raised','Total Spent'],
+            rows: d.results.slice(0,10).map(c => [c.name||'—', c.party||'—', c.state||'—', fmtM(c.receipts), fmtM(c.disbursements)]) },
+          source_url: 'https://www.fec.gov/data/elections/senate/' + year + '/'
+        };
+      }
+      if (isHouse && isRanking) {
+        const r = await fetch('https://api.open.fec.gov/v1/candidates/totals/?office=H&election_year=' + year + '&sort=-receipts&per_page=10&api_key=' + KEY);
+        if (!r.ok) return null;
+        const d = await r.json();
+        if (!d.results?.length) return null;
+        return {
+          summary: 'Top House candidates by total receipts in the ' + year + ' election cycle, per FEC filings.',
+          table: { headers: ['Candidate','Party','State','Total Raised','Total Spent'],
+            rows: d.results.slice(0,10).map(c => [c.name||'—', c.party||'—', c.state||'—', fmtM(c.receipts), fmtM(c.disbursements)]) },
+          source_url: 'https://www.fec.gov/data/elections/house/' + year + '/'
+        };
+      }
+    } catch(e) { return null; }
+    return null;
+  }
+
+  // ── Progress helpers ──────────────────────────────────────
+  function showProgress() { document.getElementById('progress-bar-wrap').style.display = 'block'; setProgress(0); }
+  function setProgress(pct) { const b = document.getElementById('progress-bar'); b.className = ''; b.style.width = pct + '%'; }
+  function startIndeterminate() { document.getElementById('progress-bar').className = 'indet'; }
+  function hideProgress() {
+    setProgress(100);
+    setTimeout(() => { document.getElementById('progress-bar-wrap').style.display = 'none'; document.getElementById('progress-bar').style.width = '0%'; }, 450);
+  }
+
+  // ── Main ask function ─────────────────────────────────────
+  async function askQuestion() {
+    const q = document.getElementById('query').value.trim();
+    const apiKey = document.getElementById('api-key').value.trim();
+    if (!q) return;
+    if (!apiKey) {
+      const eb = document.getElementById('error-box');
+      eb.textContent = 'Please enter your Anthropic API key above.';
+      eb.style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('ask-btn');
+    btn.disabled = true;
+    document.getElementById('error-box').style.display = 'none';
+    document.getElementById('answer-box').style.display = 'none';
+    document.getElementById('table-container').innerHTML = '';
+    document.getElementById('answer-text').textContent = '';
+    logQuery(q);
+    showProgress();
+
+    try {
+      // Stage 1 — FEC API direct (fast ~1s, no API key needed)
+      setStatus('Querying FEC…');
+      setProgress(25);
+      const yearMatch = q.match(/20\d\d/);
+      const year = yearMatch ? yearMatch[0] : '2024';
+      const direct = await tryFecDirect(q, year);
+      if (direct) {
+        document.getElementById('answer-text').textContent = direct.summary;
+        if (direct.table) renderTable(direct.table);
+        if (direct.source_url) document.getElementById('fec-link').href = direct.source_url;
+        document.getElementById('answer-box').style.display = 'block';
+        hideProgress(); setStatus(''); btn.disabled = false;
+        return;
+      }
+
+
+      // Stage 2 — Claude Sonnet + web search
+      setStatus('Searching with Claude…');
+      startIndeterminate();
+      debugLog('Stage 2: calling Claude Sonnet with web search');
+
+      const system = `You are a campaign finance expert. Answer questions about US campaign finance using web_search to find current data from fec.gov or opensecrets.org.
+IMPORTANT: Return ONLY a raw JSON object. No markdown, no backticks, no preamble, no explanation before or after the JSON.
+Format: {"summary":"2-3 sentences with dollar figures","table":{"headers":["Col1",...],"rows":[["val",...],...]},"source_url":"https://www.fec.gov/..."}
+Max 10 rows, 5 columns. Money as "$12.3M". Set table to null if not useful.`;
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          system,
+          messages: [{ role: 'user', content: q }]
+        })
+      });
+
+      debugLog('HTTP ' + resp.status);
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        debugLog('Error: ' + JSON.stringify(errBody));
+        throw new Error(errBody?.error?.message || 'API error ' + resp.status);
+      }
+
+      const data = await resp.json();
+      debugLog('stop_reason=' + data.stop_reason + ' blocks=' + data.content?.length);
+      const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+      debugLog('raw text: ' + raw.slice(0, 200));
+
+      let parsed;
+      try {
+        const clean = raw.replace(/```json|```/g, '').trim();
+        const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
+        if (si === -1 || ei === -1) throw new Error('No JSON in response');
+        parsed = JSON.parse(clean.slice(si, ei + 1));
+      } catch(pe) {
+        debugLog('Parse error: ' + pe.message);
+        document.getElementById('answer-text').textContent = raw || 'Claude returned an unexpected response format. See debug panel.';
+        document.getElementById('answer-box').style.display = 'block';
+        hideProgress(); setStatus(''); btn.disabled = false;
+        return;
+      }
+
+      document.getElementById('answer-text').textContent = parsed.summary || '';
+      if (parsed.table?.headers && parsed.table?.rows?.length) renderTable(parsed.table);
+      if (parsed.source_url) document.getElementById('fec-link').href = parsed.source_url;
+      document.getElementById('answer-box').style.display = 'block';
+      hideProgress(); setStatus('');
+      debugLog('Success.');
+
+    } catch (err) {
+      hideProgress(); setStatus('');
+      const eb = document.getElementById('error-box');
+      eb.textContent = err.message || 'Something went wrong. Please try again.';
+      eb.style.display = 'block';
+    }
+    btn.disabled = false;
+  }
+
+  function renderTable(table) {
+    const container = document.getElementById('table-container');
+    const card = document.createElement('div');
+    card.className = 'table-card';
+
+    card.innerHTML = `<div class="table-header">
+      <span class="table-title">Results</span>
+      <span class="table-count">${table.rows.length} rows</span>
+    </div>`;
+
+    const scroll = document.createElement('div');
+    scroll.className = 'table-scroll';
+
+    const t = document.createElement('table');
+    const thead = document.createElement('thead');
+    const hr = document.createElement('tr');
+    table.headers.forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    t.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    table.rows.forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach((cell, i) => {
+        const td = document.createElement('td');
+        const h = (table.headers[i] || '').toLowerCase();
+        const s = String(cell ?? '—');
+        if (h === 'party') {
+          td.innerHTML = partyBadge(s);
+        } else if (isMoney(h) && s !== '—') {
+          td.innerHTML = `<span class="money">${trunc(s, 20)}</span>`;
+        } else if (s === '—' || s === 'null' || s === '') {
+          td.innerHTML = '<span class="dim">—</span>';
+        } else {
+          td.textContent = trunc(s, 55);
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+    scroll.appendChild(t);
+    card.appendChild(scroll);
+    container.appendChild(card);
+  }
+
+  document.getElementById('query').addEventListener('keydown', e => {
+    if (e.key === 'Enter') askQuestion();
+  });
+
+  // ── Query Log ──────────────────────────────────────────────
+  function loadLog() { try { return JSON.parse(localStorage.getItem('fec_query_log') || '[]'); } catch { return []; } }
+  function saveLog(log) { localStorage.setItem('fec_query_log', JSON.stringify(log)); }
+
+  function logQuery(q) {
+    const log = loadLog();
+    log.unshift({ q, ts: new Date().toISOString() });
+    if (log.length > 200) log.pop();
+    saveLog(log);
+    renderLog();
+  }
+
+  function renderLog() {
+    const log = loadLog();
+    const body = document.getElementById('log-body');
+    const empty = document.getElementById('log-empty');
+    if (!log.length) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = '';
+    log.forEach(entry => {
+      const d = new Date(entry.ts);
+      const time = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<span class="log-time">${time}</span><span class="log-q">${entry.q}</span>`;
+      body.appendChild(div);
+    });
+  }
+
+  function exportLog() {
+    const log = loadLog();
+    if (!log.length) return;
+    const csv = 'Timestamp,Query\n' + log.map(e => `"${e.ts}","${e.q.replace(/"/g, '""')}"`).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'fec-query-log.csv';
+    a.click();
+  }
+
+  // ── Suggestion Box ─────────────────────────────────────────
+  function loadSuggestions() { try { return JSON.parse(localStorage.getItem('fec_suggestions') || '[]'); } catch { return []; } }
+  function saveSuggestions(s) { localStorage.setItem('fec_suggestions', JSON.stringify(s)); }
+
+  function submitSuggestion() {
+    const inp = document.getElementById('suggestion-input');
+    const text = inp.value.trim();
+    if (!text) return;
+    const suggestions = loadSuggestions();
+    suggestions.unshift({ text, ts: new Date().toISOString() });
+    saveSuggestions(suggestions);
+    inp.value = '';
+    renderSuggestions();
+  }
+
+  function clearSuggestions() {
+    if (!confirm('Clear all suggestions?')) return;
+    saveSuggestions([]);
+    renderSuggestions();
+  }
+
+  function renderSuggestions() {
+    const suggestions = loadSuggestions();
+    const body = document.getElementById('suggestion-body');
+    const empty = document.getElementById('suggestion-empty');
+    if (!suggestions.length) { empty.style.display = 'block'; body.innerHTML = ''; body.appendChild(empty); return; }
+    empty.style.display = 'none';
+    body.innerHTML = '';
+    suggestions.forEach((s, i) => {
+      const d = new Date(s.ts);
+      const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const div = document.createElement('div');
+      div.className = 'suggestion-entry';
+      div.innerHTML = `<span class="suggestion-num">${i + 1}.</span><span class="suggestion-text">${s.text}</span><span class="suggestion-date">${date}</span>`;
+      body.appendChild(div);
+    });
+  }
+
+  document.getElementById('suggestion-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitSuggestion();
+  });
+
+  // init on load
+  renderLog();
+  renderSuggestions();
+
+  // persist API key in localStorage
+  const savedKey = localStorage.getItem('fec_anthropic_key');
+  if (savedKey) document.getElementById('api-key').value = savedKey;
+  document.getElementById('api-key').addEventListener('input', e => {
+    localStorage.setItem('fec_anthropic_key', e.target.value);
+  });
+
+  // ── Debug log ─────────────────────────────────────────────
+  function debugLog(msg) {
+    console.log('[FEC]', msg);
+    const panel = document.getElementById('debug-panel');
+    const log = document.getElementById('debug-log');
+    panel.style.display = 'block';
+    const div = document.createElement('div');
+    div.textContent = msg;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+  function toggleDebug() {
+    const log = document.getElementById('debug-log');
+    const btn = document.getElementById('debug-toggle');
+    const visible = log.style.display !== 'none';
+    log.style.display = visible ? 'none' : 'block';
+    btn.textContent = visible ? 'Show debug log' : 'Hide debug log';
+  }
+</script>
+</body>
+</html>
